@@ -1,0 +1,118 @@
+resource_types:
+  - name: time
+    type: registry-image
+    source: { repository: concourse/time-resource }
+resources:
+  - name: ubuntu
+    type: registry-image
+    source:
+      repository: ((docker-hub-username))/scpd-runner
+      username: ((docker-hub-username))
+      password: ((docker-hub-password))
+  - name: periodic
+    type: time
+    source:
+      interval: 12h
+  - name: repo
+    type: git
+    source:
+      uri: ((repo_clone_url))
+      branch: main
+      username: x-access-token
+      password: ((github_token))
+jobs:
+  - name: detect-drift
+    max_in_flight: 1
+    serial: true
+    plan:
+      - get: periodic
+        trigger: true
+      - get: repo
+      - get: ubuntu
+      - task: recipe-runner
+        image: ubuntu
+        config:
+          platform: linux
+          inputs:
+            - name: repo
+          params:
+            GIT_TOKEN_FOR_PRS: ((github_token))
+            REPO_FULL_NAME: ((repo_full_name))
+            MAVEN_PASSWORD: ((maven_password))
+            MAVEN_USERNAME: ((maven_username))
+            SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_URI: https://github.com/dashaun-tanzu/advisor-mappings.git
+            SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_PATH: mappings/
+          run:
+            path: bash
+            args:
+              - -lc
+              - |
+                set -Eeo pipefail
+                echo "Install advisor and validate its working"
+                until curl -L -H "Authorization: Bearer $MAVEN_PASSWORD" \
+                  -o advisor-cli.tar \
+                  -X GET https://packages.broadcom.com/artifactory/spring-enterprise/com/vmware/tanzu/spring/application-advisor-cli-linux/1.4.1/application-advisor-cli-linux-1.4.1.tar; do
+                  echo "Retrying..."
+                  sleep 1
+                done
+                tar -xf advisor-cli.tar
+                chmod +x cli-binary/advisor
+                cli-binary/advisor -v
+                install cli-binary/advisor /usr/local/bin
+                advisor -v
+                
+                cd repo
+                git checkout main
+                sed -i '' "s/MAVEN_USERNAME/$MAVEN_USERNAME/g" /root/.m2/settings.xml
+                sed -i '' "s/MAVEN_PASSWORD/$MAVEN_PASSWORD/g" /root/.m2/settings.xml
+                echo $GIT_TOKEN_FOR_PRS | gh auth login --with-token
+                if [[ $(gh pr list --state open --json number | jq length) -eq 0 ]]; then
+                  echo "No open PRs found"
+                else
+                  echo "Open PRs found - task successful"
+                  exit 0
+                fi
+                
+                source "$HOME/.sdkman/bin/sdkman-init.sh"
+                sdk use java 21.0.8-librca
+                
+                echo "***"
+                cat /root/.m2/settings.xml
+                echo "***"
+                ./mvnw dependency:tree
+                echo "***"
+                
+                advisor build-config get
+                
+                output=$(advisor upgrade-plan get)
+                if [[ $output == *"No upgrade plans available"* ]]; then
+                  echo "No upgrades available, but maybe there is a patch version..."
+                  ./mvnw org.openrewrite.maven:rewrite-maven-plugin:run -Drewrite.configLocation=https://raw.githubusercontent.com/dashaun-tanzu/openrewrite-recipes/refs/heads/main/MavenUpgradeSpringBootToLatestPatch.yaml -Drewrite.activeRecipes=com.dashaun.openrewrite.MavenUpgradeSpringBootToLatestPatch
+                  
+                  if ! git diff --quiet || ! git diff --cached --quiet; then
+                    git config --global user.email "$GIT_EMAIL"
+                    git config --global user.name "DaShaun"
+                    echo $GIT_TOKEN_FOR_PRS | gh auth login --with-token
+                    gh auth setup-git
+                    BRANCH_NAME="MavenUpgradeSpringBootToLatestPatch-$(date +%Y%m%d-%H%M%S)"          
+                    git checkout -b "$BRANCH_NAME"
+                    git add .
+                    DATE=$(date)
+                    git commit -m "$BRANCH_NAME"
+                    git push -u origin "$BRANCH_NAME"
+                    gh repo set-default $REPO_FULL_NAME
+                    gh pr create --repo $REPO_FULL_NAME --fill --base main --head "$BRANCH_NAME"
+                    echo "Pull request created!"
+                  else
+                    echo "No changes to commit."
+                  fi
+                else
+                  set +e
+                  advisor upgrade-plan apply --push || {
+                    for file in .advisor/errors/*; do
+                      echo "$file"
+                      cat "$file"
+                    done
+                  }
+                  set -e
+                fi
