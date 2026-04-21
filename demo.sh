@@ -68,10 +68,8 @@ EOF
     
     # macOS compatibility: remove Linux-specific Docker settings
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        cd "$TEMP_DIR"
         sed -i '' '/privileged: true/d' docker-compose.yml
         sed -i '' '/cgroup: host/d' docker-compose.yml
-        cd ..
     fi
     
     docker compose up -d
@@ -82,9 +80,16 @@ shutdown_concourse() {
 }
 
 install_fly() {
-    until curl 'http://localhost:8080/api/v1/cli?arch=amd64&platform=linux' -o fly; do
-        echo "Retrying..."
-        sleep 1
+    local max_retries=60
+    local attempt=0
+    until curl -sf 'http://localhost:8080/api/v1/cli?arch=amd64&platform=darwin' -o fly; do
+        attempt=$((attempt + 1))
+        if [ "$attempt" -ge "$max_retries" ]; then
+            echo "Concourse did not become available after $max_retries attempts. Exiting."
+            exit 1
+        fi
+        echo "Waiting for Concourse... ($attempt/$max_retries)"
+        sleep 5
     done
 #    export REGISTRY_IP="$(docker inspect $(docker compose ps -q registry) | grep -i ipaddress | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tail -1)"
 #    echo $REGISTRY_IP
