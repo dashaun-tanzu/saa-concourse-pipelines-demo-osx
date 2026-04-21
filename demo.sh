@@ -66,9 +66,10 @@ EOF
     docker compose down --remove-orphans
     docker volume prune -f
     
-    # macOS compatibility: remove Linux-specific Docker settings
+    # macOS compatibility: remove cgroup: host (not supported by Docker Desktop)
+    # privileged: true is kept — Docker Desktop runs a Linux VM and supports it
+    # and the containerd worker runtime requires it for iptables access
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' '/privileged: true/d' docker-compose.yml
         sed -i '' '/cgroup: host/d' docker-compose.yml
     fi
     

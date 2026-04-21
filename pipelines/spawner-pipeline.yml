@@ -20,7 +20,7 @@ resources:
   - name: templates
     type: git
     source:
-      uri: https://github.com/dashaun-tanzu/saa-concourse-pipelines-demo
+      uri: https://github.com/dashaun-tanzu/saa-concourse-pipelines-demo-osx
       branch: main
 
 jobs:
