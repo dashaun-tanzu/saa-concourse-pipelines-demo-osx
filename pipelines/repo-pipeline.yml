@@ -75,7 +75,7 @@ jobs:
                 fi
                 
                 source "$HOME/.sdkman/bin/sdkman-init.sh"
-                sdk use java 21.0.8-librca
+                sdk use java 21.0.10-librca
                 
                 echo "***"
                 cat /root/.m2/settings.xml
