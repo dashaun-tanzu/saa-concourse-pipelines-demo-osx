@@ -112,13 +112,18 @@ install_fly() {
         ./fly -t advisor-demo set-team --team-name "$org" --local-user test --non-interactive
     done
 
+    NEXUS_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' saa-nexus)
+    NEXUS_URL="http://${NEXUS_IP}:8081/repository/maven-public/"
+    echo "Nexus URL for pipelines: $NEXUS_URL"
+
     ./fly -t advisor-demo set-pipeline --non-interactive \
             -p rewrite-spawner \
             -c ../pipelines/spawner-pipeline.yml \
             -v github_token="$GIT_TOKEN_FOR_PRS" \
             -v github_orgs="$GITHUB_ORGS" \
             -v api_base='https://api.github.com' \
-            -v maven_password="$MAVEN_PASSWORD" > /dev/null
+            -v maven_password="$MAVEN_PASSWORD" \
+            -v nexus_url="$NEXUS_URL" > /dev/null
     ./fly -t advisor-demo unpause-pipeline -p rewrite-spawner
     ./fly -t advisor-demo trigger-job -j rewrite-spawner/discover-and-spawn
 }

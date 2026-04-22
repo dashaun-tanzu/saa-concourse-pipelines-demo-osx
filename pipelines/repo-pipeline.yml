@@ -40,6 +40,7 @@ jobs:
             GIT_TOKEN_FOR_PRS: ((github_token))
             REPO_FULL_NAME: ((repo_full_name))
             MAVEN_PASSWORD: ((maven_password))
+            NEXUS_URL: ((nexus_url))
             SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_URI: https://github.com/dashaun-tanzu/advisor-mappings.git
             SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_PATH: mappings/
           run:
@@ -63,13 +64,13 @@ jobs:
                 
                 cd repo
                 git checkout main
-                cat > /root/.m2/settings.xml << 'SETTINGS'
+                cat > /root/.m2/settings.xml << SETTINGS
                 <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
                     <mirrors>
                         <mirror>
                             <id>nexus</id>
                             <mirrorOf>*</mirrorOf>
-                            <url>http://host.docker.internal:9081/repository/maven-public/</url>
+                            <url>$NEXUS_URL</url>
                         </mirror>
                     </mirrors>
                 </settings>
