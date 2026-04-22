@@ -6,9 +6,10 @@ resources:
   - name: ubuntu
     type: registry-image
     source:
-      repository: ((docker-hub-username))/scpd-runner
-      username: ((docker-hub-username))
-      password: ((docker-hub-password))
+      repository: ghcr.io/dashaun/scpd-runner
+      tag: latest
+      username: ((github_token))
+      password: ((github_token))
   - name: periodic
     type: time
     source:

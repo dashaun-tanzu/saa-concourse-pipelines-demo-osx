@@ -27,7 +27,7 @@ init() {
 
 install_concourse() {
     curl -O https://concourse-ci.org/docker-compose.yml
-    sed -i '' 's/image: concourse\/concourse$/image: concourse\/concourse:7.14.1/' docker-compose.yml
+    sed -i '' 's/image: concourse\/concourse$/image: concourse\/concourse:8.1/' docker-compose.yml
     sed -i '' "s|CONCOURSE_EXTERNAL_URL: http://localhost:8080|CONCOURSE_EXTERNAL_URL: $CONCOURSE_EXTERNAL_URL|g" docker-compose.yml
     sed -i '' 's/8\.8\.8\.8/1.1.1.1/g' docker-compose.yml
     sed -i '' 's/tutorial/dashaun-tanzu/g' docker-compose.yml
@@ -37,24 +37,24 @@ install_concourse() {
     #Add Nexus
     # shellcheck disable=SC1073
 cat >> docker-compose.yml << 'EOF'
-  nexus:
+  saa-nexus:
     image: sonatype/nexus3
-    container_name: nexus
+    container_name: saa-nexus
     ports:
-      - "8081:8081"
+      - "9081:8081"
     restart: unless-stopped
   nexus-config:
     image: curlimages/curl:latest
     depends_on:
-      - nexus
+      - saa-nexus
     command: >
       sh -c "
         echo 'Waiting for Nexus to start...'
-        while ! curl -f -s http://nexus:8081/service/rest/v1/status; do
+        while ! curl -f -s http://saa-nexus:8081/service/rest/v1/status; do
           sleep 10
         done
         echo 'Configuring anonymous access...'
-        curl -X PUT 'http://nexus:8081/service/rest/v1/security/anonymous' \
+        curl -X PUT 'http://saa-nexus:8081/service/rest/v1/security/anonymous' \
           -H 'Content-Type: application/json' \
           -u admin:admin123 \
           -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}'
@@ -110,9 +110,7 @@ install_fly() {
             -v github_orgs="$GITHUB_ORGS" \
             -v api_base='https://api.github.com' \
             -v maven_password="$MAVEN_PASSWORD" \
-            -v maven_username="$MAVEN_USERNAME" \
-            -v docker-hub-username="$DOCKER_USER" \
-            -v docker-hub-password="$DOCKER_PASS" > /dev/null
+            -v maven_username="$MAVEN_USERNAME" > /dev/null
     ./fly -t advisor-demo unpause-pipeline -p rewrite-spawner
     ./fly -t advisor-demo trigger-job -j rewrite-spawner/discover-and-spawn
 }
@@ -130,11 +128,8 @@ displayMessage() {
 }
 
 publish_runner() {
-  cd ../docker
-  echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-  docker build -t scpd-runner:latest .
-  docker tag scpd-runner:latest $DOCKER_USER/scpd-runner:latest
-  docker push $DOCKER_USER/scpd-runner:latest
+  echo "Runner image is now managed in a separate repository."
+  echo "See: ghcr.io/dashaun/scpd-runner:latest"
 }
 
 # Main execution flow
