@@ -43,7 +43,7 @@ jobs:
           run:
             path: sh
             args:
-              - -exc
+              - -ec
               - |
                 apk add --no-cache curl jq yq
 
