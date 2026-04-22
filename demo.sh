@@ -30,6 +30,8 @@ install_concourse() {
     sed -i '' 's/image: concourse\/concourse$/image: concourse\/concourse:8.1/' docker-compose.yml
     sed -i '' "s|CONCOURSE_EXTERNAL_URL: http://localhost:8080|CONCOURSE_EXTERNAL_URL: $CONCOURSE_EXTERNAL_URL|g" docker-compose.yml
     sed -i '' 's/8\.8\.8\.8/1.1.1.1/g' docker-compose.yml
+    sed -i '' '/CONCOURSE_WORKER_CONTAINERD_DNS_SERVER/a\
+      CONCOURSE_WORKER_CONTAINERD_DNS_PROXY_ENABLE: "true"' docker-compose.yml
     sed -i '' 's/tutorial/dashaun-tanzu/g' docker-compose.yml
     sed -i '' 's/overlay/naive/g' docker-compose.yml
     echo '    restart: unless-stopped' >> docker-compose.yml
@@ -40,6 +42,8 @@ cat >> docker-compose.yml << 'EOF'
   saa-nexus:
     image: sonatype/nexus3
     container_name: saa-nexus
+    environment:
+      NEXUS_SECURITY_RANDOMPASSWORD: "false"
     ports:
       - "9081:8081"
     restart: unless-stopped
@@ -47,10 +51,13 @@ cat >> docker-compose.yml << 'EOF'
     image: curlimages/curl:latest
     depends_on:
       - saa-nexus
+    environment:
+      MAVEN_USERNAME: ${MAVEN_USERNAME}
+      MAVEN_PASSWORD: ${MAVEN_PASSWORD}
     command: >
       sh -c "
-        echo 'Waiting for Nexus to start...'
-        while ! curl -f -s http://saa-nexus:8081/service/rest/v1/status; do
+        echo 'Waiting for Nexus to be writable...'
+        while ! curl -f -s http://saa-nexus:8081/service/rest/v1/status/writable; do
           sleep 10
         done
         echo 'Configuring anonymous access...'
@@ -58,7 +65,18 @@ cat >> docker-compose.yml << 'EOF'
           -H 'Content-Type: application/json' \
           -u admin:admin123 \
           -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}'
-        echo 'Configuration complete'
+        echo 'Creating spring-enterprise proxy repository...'
+        PROXY_JSON=$$(printf '{\"name\":\"spring-enterprise\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"proxy\":{\"remoteUrl\":\"https://packages.broadcom.com/artifactory/spring-enterprise\",\"contentMaxAge\":1440,\"metadataMaxAge\":1440},\"httpClient\":{\"blocked\":false,\"autoBlock\":true,\"authentication\":{\"type\":\"username\",\"username\":\"%s\",\"password\":\"%s\"}},\"maven\":{\"versionPolicy\":\"RELEASE\",\"layoutPolicy\":\"STRICT\"},\"negativeCache\":{\"enabled\":true,\"timeToLive\":1440}}' \"$$MAVEN_USERNAME\" \"$$MAVEN_PASSWORD\")
+        curl -X POST 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy' \
+          -H 'Content-Type: application/json' \
+          -u admin:admin123 \
+          -d \"$$PROXY_JSON\" || echo 'spring-enterprise proxy may already exist'
+        echo 'Updating maven-public group to include spring-enterprise...'
+        curl -X PUT 'http://saa-nexus:8081/service/rest/v1/repositories/maven/group/maven-public' \
+          -H 'Content-Type: application/json' \
+          -u admin:admin123 \
+          -d '{\"name\":\"maven-public\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"group\":{\"memberNames\":[\"maven-releases\",\"maven-snapshots\",\"maven-central\",\"spring-enterprise\"]},\"maven\":{\"versionPolicy\":\"MIXED\",\"layoutPolicy\":\"STRICT\"}}'
+        echo 'Nexus configuration complete'
       "
     restart: "no"
 EOF
@@ -109,8 +127,7 @@ install_fly() {
             -v github_token="$GIT_TOKEN_FOR_PRS" \
             -v github_orgs="$GITHUB_ORGS" \
             -v api_base='https://api.github.com' \
-            -v maven_password="$MAVEN_PASSWORD" \
-            -v maven_username="$MAVEN_USERNAME" > /dev/null
+            -v maven_password="$MAVEN_PASSWORD" > /dev/null
     ./fly -t advisor-demo unpause-pipeline -p rewrite-spawner
     ./fly -t advisor-demo trigger-job -j rewrite-spawner/discover-and-spawn
 }

@@ -40,7 +40,6 @@ jobs:
             GIT_TOKEN_FOR_PRS: ((github_token))
             REPO_FULL_NAME: ((repo_full_name))
             MAVEN_PASSWORD: ((maven_password))
-            MAVEN_USERNAME: ((maven_username))
             SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_URI: https://github.com/dashaun-tanzu/advisor-mappings.git
             SPRING_ADVISOR_MAPPING_CUSTOM_0_GIT_PATH: mappings/
           run:
@@ -64,8 +63,17 @@ jobs:
                 
                 cd repo
                 git checkout main
-                sed -i "s/MAVEN_USERNAME/$MAVEN_USERNAME/g" /root/.m2/settings.xml
-                sed -i "s/MAVEN_PASSWORD/$MAVEN_PASSWORD/g" /root/.m2/settings.xml
+                cat > /root/.m2/settings.xml << 'SETTINGS'
+                <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+                    <mirrors>
+                        <mirror>
+                            <id>nexus</id>
+                            <mirrorOf>*</mirrorOf>
+                            <url>http://saa-nexus:8081/repository/maven-public/</url>
+                        </mirror>
+                    </mirrors>
+                </settings>
+                SETTINGS
                 echo $GIT_TOKEN_FOR_PRS | gh auth login --with-token
                 if [[ $(gh pr list --state open --json number | jq length) -eq 0 ]]; then
                   echo "No open PRs found"
