@@ -22,6 +22,8 @@ resources:
     source:
       uri: https://github.com/dashaun-tanzu/saa-concourse-pipelines-demo-osx
       branch: main
+      username: x-oauth-basic
+      password: ((github_token))
 
 jobs:
   - name: discover-and-spawn
