@@ -61,21 +61,12 @@ cat >> docker-compose.yml << 'EOF'
           sleep 10
         done
         echo 'Configuring anonymous access...'
-        curl -X PUT 'http://saa-nexus:8081/service/rest/v1/security/anonymous' \
-          -H 'Content-Type: application/json' \
-          -u admin:admin123 \
-          -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}'
+        curl -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}' 'http://saa-nexus:8081/service/rest/v1/security/anonymous'
         echo 'Creating spring-enterprise proxy repository...'
         PROXY_JSON=$$(printf '{\"name\":\"spring-enterprise\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"proxy\":{\"remoteUrl\":\"https://packages.broadcom.com/artifactory/spring-enterprise\",\"contentMaxAge\":1440,\"metadataMaxAge\":1440},\"httpClient\":{\"blocked\":false,\"autoBlock\":true,\"authentication\":{\"type\":\"username\",\"username\":\"%s\",\"password\":\"%s\"}},\"maven\":{\"versionPolicy\":\"RELEASE\",\"layoutPolicy\":\"STRICT\"},\"negativeCache\":{\"enabled\":true,\"timeToLive\":1440}}' \"$$MAVEN_USERNAME\" \"$$MAVEN_PASSWORD\")
-        curl -X POST 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy' \
-          -H 'Content-Type: application/json' \
-          -u admin:admin123 \
-          -d \"$$PROXY_JSON\" || echo 'spring-enterprise proxy may already exist'
+        curl -X POST -H 'Content-Type: application/json' -u admin:admin123 -d \"$$PROXY_JSON\" 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy' || echo 'spring-enterprise proxy may already exist'
         echo 'Updating maven-public group to include spring-enterprise...'
-        curl -X PUT 'http://saa-nexus:8081/service/rest/v1/repositories/maven/group/maven-public' \
-          -H 'Content-Type: application/json' \
-          -u admin:admin123 \
-          -d '{\"name\":\"maven-public\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"group\":{\"memberNames\":[\"maven-releases\",\"maven-snapshots\",\"maven-central\",\"spring-enterprise\"]},\"maven\":{\"versionPolicy\":\"MIXED\",\"layoutPolicy\":\"STRICT\"}}'
+        curl -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d '{\"name\":\"maven-public\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"group\":{\"memberNames\":[\"maven-releases\",\"maven-snapshots\",\"maven-central\",\"spring-enterprise\"]},\"maven\":{\"versionPolicy\":\"MIXED\",\"layoutPolicy\":\"STRICT\"}}' 'http://saa-nexus:8081/service/rest/v1/repositories/maven/group/maven-public'
         echo 'Nexus configuration complete'
       "
     restart: "no"

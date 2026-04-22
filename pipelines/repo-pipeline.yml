@@ -69,7 +69,7 @@ jobs:
                         <mirror>
                             <id>nexus</id>
                             <mirrorOf>*</mirrorOf>
-                            <url>http://saa-nexus:8081/repository/maven-public/</url>
+                            <url>http://host.docker.internal:9081/repository/maven-public/</url>
                         </mirror>
                     </mirrors>
                 </settings>
