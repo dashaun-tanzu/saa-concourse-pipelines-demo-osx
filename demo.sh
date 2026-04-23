@@ -60,6 +60,8 @@ cat >> docker-compose.yml << 'EOF'
         while ! curl -f -s http://saa-nexus:8081/service/rest/v1/status/writable; do
           sleep 10
         done
+        echo 'Accepting EULA...'
+        curl -s -u admin:admin123 -H 'Accept: application/json' 'http://saa-nexus:8081/service/rest/v1/system/eula' | sed 's/\"accepted\" : false/\"accepted\" : true/' | curl -s -u admin:admin123 -X POST -H 'Content-Type: application/json' 'http://saa-nexus:8081/service/rest/v1/system/eula' -d @-
         echo 'Configuring anonymous access...'
         curl -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}' 'http://saa-nexus:8081/service/rest/v1/security/anonymous'
         echo 'Creating spring-enterprise proxy repository...'
