@@ -52,7 +52,7 @@ jobs:
                 echo "Install advisor and validate its working"
                 until curl -L -H "Authorization: Bearer $MAVEN_PASSWORD" \
                   -o advisor-cli.tar \
-                  -X GET https://packages.broadcom.com/artifactory/spring-enterprise/com/vmware/tanzu/spring/application-advisor-cli-linux/1.4.1/application-advisor-cli-linux-1.4.1.tar; do
+                  -X GET https://packages.broadcom.com/artifactory/spring-enterprise/com/vmware/tanzu/spring/application-advisor-cli-linux/1.6.1/application-advisor-cli-linux-1.6.1.tar; do
                   echo "Retrying..."
                   sleep 1
                 done
