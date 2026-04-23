@@ -89,7 +89,7 @@ jobs:
                 echo "***"
                 cat /root/.m2/settings.xml
                 echo "***"
-                ./mvnw dependency:tree
+                ./mvnw -q dependency:tree
                 echo "***"
                 
                 advisor build-config get
@@ -98,7 +98,7 @@ jobs:
                 if [[ $output == *"No upgrade plans available"* ]]; then
                   echo "No upgrades available, but maybe there is a patch version..."
                   if [ -f .sdkmanrc ]; then sdk env install; fi
-                  ./mvnw org.openrewrite.maven:rewrite-maven-plugin:run -Drewrite.configLocation=https://raw.githubusercontent.com/dashaun-tanzu/openrewrite-recipes/refs/heads/main/MavenUpgradeSpringBootToLatestPatch.yaml -Drewrite.activeRecipes=com.dashaun.openrewrite.MavenUpgradeSpringBootToLatestPatch
+                  ./mvnw -q org.openrewrite.maven:rewrite-maven-plugin:run -Drewrite.configLocation=https://raw.githubusercontent.com/dashaun-tanzu/openrewrite-recipes/refs/heads/main/MavenUpgradeSpringBootToLatestPatch.yaml -Drewrite.activeRecipes=com.dashaun.openrewrite.MavenUpgradeSpringBootToLatestPatch
                   
                   if ! git diff --quiet || ! git diff --cached --quiet; then
                     git config --global user.email "$GIT_EMAIL"
