@@ -13,7 +13,7 @@ resources:
   - name: periodic
     type: time
     source:
-      interval: 12h
+      interval: 30m
   - name: repo
     type: git
     source:
