@@ -154,16 +154,21 @@ jobs:
                   advisor -v
                 }
                 
-                configure_maven() {
-                  echo "Configuring Maven credentials..."
-                  sed -i "s/MAVEN_USERNAME/$MAVEN_USERNAME/g" /root/.m2/settings.xml
-                  sed -i "s/MAVEN_PASSWORD/$MAVEN_PASSWORD/g" /root/.m2/settings.xml
-                }
-                
                 configure_git() {
                   echo "Configuring Git..."
                   cd repo
                   git checkout main
+                  cat > /root/.m2/settings.xml << SETTINGS
+                  <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+                      <mirrors>
+                          <mirror>
+                              <id>nexus</id>
+                              <mirrorOf>*</mirrorOf>
+                              <url>$NEXUS_URL</url>
+                          </mirror>
+                      </mirrors>
+                  </settings>
+                  SETTINGS
                   git config --global user.email "$GIT_EMAIL"
                   git config --global user.name "$GIT_NAME"
                   echo "$GIT_TOKEN_FOR_PRS" | gh auth login --with-token
@@ -239,7 +244,6 @@ jobs:
                 
                 # Main execution
                 install_advisor
-                configure_maven
                 configure_git
                 
                 set +u  # Temporarily disable unbound variable check for SDKMAN
@@ -247,7 +251,7 @@ jobs:
                 source "$HOME/.sdkman/bin/sdkman-init.sh"
                 set -u  # Re-enable unbound variable check
                 
-                sdk use java 21.0.9-librca
+                sdk use java 21.0.10-librca
                 
                 advisor build-config get
                 
