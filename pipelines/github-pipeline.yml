@@ -159,16 +159,16 @@ jobs:
                   cd repo
                   git checkout main
                   cat > /root/.m2/settings.xml << SETTINGS
-                  <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
-                      <mirrors>
-                          <mirror>
-                              <id>nexus</id>
-                              <mirrorOf>*</mirrorOf>
-                              <url>$NEXUS_URL</url>
-                          </mirror>
-                      </mirrors>
-                  </settings>
-                  SETTINGS
+                <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+                    <mirrors>
+                        <mirror>
+                            <id>nexus</id>
+                            <mirrorOf>*</mirrorOf>
+                            <url>$NEXUS_URL</url>
+                        </mirror>
+                    </mirrors>
+                </settings>
+                SETTINGS
                   git config --global user.email "$GIT_EMAIL"
                   git config --global user.name "$GIT_NAME"
                   echo "$GIT_TOKEN_FOR_PRS" | gh auth login --with-token
