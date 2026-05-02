@@ -269,6 +269,7 @@ jobs:
               git_name: ((git_name))
               maven_password: ((maven_password))
               maven_username: ((maven_username))
+              nexus_url: ((nexus_url))
 
       - across:
           - var: project
@@ -289,3 +290,4 @@ jobs:
               git_name: ((git_name))
               maven_password: ((maven_password))
               maven_username: ((maven_username))
+              nexus_url: ((nexus_url))
