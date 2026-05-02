@@ -2,6 +2,15 @@
 
 TEMP_DIR="upgrade-example"
 
+# Detect platform: BSD (macOS) vs GNU (Linux) tools, and matching fly binary
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    SED_INPLACE=(sed -i '')
+    FLY_PLATFORM="darwin"
+else
+    SED_INPLACE=(sed -i)
+    FLY_PLATFORM="linux"
+fi
+
 # Function definitions
 check_dependencies() {
     local tools=("vendir" "http")
@@ -27,13 +36,12 @@ init() {
 
 install_concourse() {
     curl -O https://concourse-ci.org/docker-compose.yml
-    sed -i '' 's/image: concourse\/concourse$/image: concourse\/concourse:8.1/' docker-compose.yml
-    sed -i '' "s|CONCOURSE_EXTERNAL_URL: http://localhost:8080|CONCOURSE_EXTERNAL_URL: $CONCOURSE_EXTERNAL_URL|g" docker-compose.yml
-    sed -i '' 's/8\.8\.8\.8/1.1.1.1/g' docker-compose.yml
-    sed -i '' '/CONCOURSE_WORKER_CONTAINERD_DNS_SERVER/a\
-      CONCOURSE_WORKER_CONTAINERD_DNS_PROXY_ENABLE: "true"' docker-compose.yml
-    sed -i '' 's/tutorial/dashaun-tanzu/g' docker-compose.yml
-    sed -i '' 's/overlay/naive/g' docker-compose.yml
+    "${SED_INPLACE[@]}" 's/image: concourse\/concourse$/image: concourse\/concourse:8.1/' docker-compose.yml
+    "${SED_INPLACE[@]}" "s|CONCOURSE_EXTERNAL_URL: http://localhost:8080|CONCOURSE_EXTERNAL_URL: $CONCOURSE_EXTERNAL_URL|g" docker-compose.yml
+    "${SED_INPLACE[@]}" 's/8\.8\.8\.8/1.1.1.1/g' docker-compose.yml
+    awk '/CONCOURSE_WORKER_CONTAINERD_DNS_SERVER/{print; print "      CONCOURSE_WORKER_CONTAINERD_DNS_PROXY_ENABLE: \"true\""; next}1' docker-compose.yml > docker-compose.yml.tmp && mv docker-compose.yml.tmp docker-compose.yml
+    "${SED_INPLACE[@]}" 's/tutorial/dashaun-tanzu/g' docker-compose.yml
+    "${SED_INPLACE[@]}" 's/overlay/naive/g' docker-compose.yml
     echo '    restart: unless-stopped' >> docker-compose.yml
 
     #Add Nexus
@@ -78,14 +86,13 @@ EOF
 
     docker compose down --remove-orphans
     docker volume prune -f
-    
-    # macOS compatibility: remove cgroup: host (not supported by Docker Desktop)
-    # privileged: true is kept — Docker Desktop runs a Linux VM and supports it
-    # and the containerd worker runtime requires it for iptables access
+
+    # macOS: remove cgroup: host (Docker Desktop doesn't support it).
+    # privileged: true stays — containerd worker needs it for iptables.
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' '/cgroup: host/d' docker-compose.yml
+        "${SED_INPLACE[@]}" '/cgroup: host/d' docker-compose.yml
     fi
-    
+
     docker compose up -d
 }
 
@@ -96,7 +103,7 @@ shutdown_concourse() {
 install_fly() {
     local max_retries=60
     local attempt=0
-    until curl -sf 'http://localhost:8080/api/v1/cli?arch=amd64&platform=darwin' -o fly; do
+    until curl -sf "http://localhost:8080/api/v1/cli?arch=amd64&platform=${FLY_PLATFORM}" -o fly; do
         attempt=$((attempt + 1))
         if [ "$attempt" -ge "$max_retries" ]; then
             echo "Concourse did not become available after $max_retries attempts. Exiting."
