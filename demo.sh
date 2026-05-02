@@ -64,9 +64,11 @@ cat >> docker-compose.yml << 'EOF'
         curl -s -u admin:admin123 -H 'Accept: application/json' 'http://saa-nexus:8081/service/rest/v1/system/eula' | sed 's/\"accepted\" : false/\"accepted\" : true/' | curl -s -u admin:admin123 -X POST -H 'Content-Type: application/json' 'http://saa-nexus:8081/service/rest/v1/system/eula' -d @-
         echo 'Configuring anonymous access...'
         curl -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d '{\"enabled\":true,\"userId\":\"anonymous\",\"realmName\":\"NexusAuthorizingRealm\"}' 'http://saa-nexus:8081/service/rest/v1/security/anonymous'
-        echo 'Creating spring-enterprise proxy repository...'
-        PROXY_JSON=$$(printf '{\"name\":\"spring-enterprise\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"proxy\":{\"remoteUrl\":\"https://packages.broadcom.com/artifactory/spring-enterprise\",\"contentMaxAge\":1440,\"metadataMaxAge\":1440},\"httpClient\":{\"blocked\":false,\"autoBlock\":true,\"authentication\":{\"type\":\"username\",\"username\":\"%s\",\"password\":\"%s\"}},\"maven\":{\"versionPolicy\":\"RELEASE\",\"layoutPolicy\":\"STRICT\"},\"negativeCache\":{\"enabled\":true,\"timeToLive\":1440}}' \"$$MAVEN_USERNAME\" \"$$MAVEN_PASSWORD\")
-        curl -X POST -H 'Content-Type: application/json' -u admin:admin123 -d \"$$PROXY_JSON\" 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy' || echo 'spring-enterprise proxy may already exist'
+        echo 'Creating or updating spring-enterprise proxy repository...'
+        PROXY_JSON=$$(printf '{\"name\":\"spring-enterprise\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":false},\"proxy\":{\"remoteUrl\":\"https://packages.broadcom.com/artifactory/spring-enterprise\",\"contentMaxAge\":1440,\"metadataMaxAge\":1440},\"httpClient\":{\"blocked\":false,\"autoBlock\":true,\"authentication\":{\"type\":\"username\",\"username\":\"%s\",\"password\":\"%s\"}},\"maven\":{\"versionPolicy\":\"RELEASE\",\"layoutPolicy\":\"STRICT\"},\"negativeCache\":{\"enabled\":true,\"timeToLive\":60}}' \"$$MAVEN_USERNAME\" \"$$MAVEN_PASSWORD\")
+        if curl -fsS -X POST -H 'Content-Type: application/json' -u admin:admin123 -d \"$$PROXY_JSON\" 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy'; then echo 'Proxy created'; else echo 'Proxy already exists, updating...'; curl -fsS -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d \"$$PROXY_JSON\" 'http://saa-nexus:8081/service/rest/v1/repositories/maven/proxy/spring-enterprise' && echo 'Proxy updated'; fi
+        echo 'Invalidating spring-enterprise negative cache...'
+        curl -fsS -X POST -u admin:admin123 'http://saa-nexus:8081/service/rest/v1/repositories/spring-enterprise/invalidate-cache' || true
         echo 'Updating maven-public group to include spring-enterprise...'
         curl -X PUT -H 'Content-Type: application/json' -u admin:admin123 -d '{\"name\":\"maven-public\",\"online\":true,\"storage\":{\"blobStoreName\":\"default\",\"strictContentTypeValidation\":true},\"group\":{\"memberNames\":[\"maven-releases\",\"maven-snapshots\",\"maven-central\",\"spring-enterprise\"]},\"maven\":{\"versionPolicy\":\"MIXED\",\"layoutPolicy\":\"STRICT\"}}' 'http://saa-nexus:8081/service/rest/v1/repositories/maven/group/maven-public'
         echo 'Nexus configuration complete'
@@ -119,13 +121,22 @@ install_fly() {
     echo "Nexus URL for pipelines: $NEXUS_URL"
 
     ./fly -t advisor-demo set-pipeline --non-interactive \
-            -p rewrite-spawner \
-            -c ../pipelines/spawner-pipeline.yml \
-            -v github_token="$GIT_TOKEN_FOR_PRS" \
-            -v github_orgs="$GITHUB_ORGS" \
-            -v api_base='https://api.github.com' \
-            -v maven_password="$MAVEN_PASSWORD" \
-            -v nexus_url="$NEXUS_URL" > /dev/null
+                -p rewrite-spawner \
+                -c ../pipelines/spawner-pipeline.yml \
+                -v advisor_version="$ADVISOR_VERSION" \
+                -v github_token="$GIT_TOKEN_FOR_PRS" \
+                -v github_orgs="$GITHUB_ORGS" \
+                -v gitlab_token="${GITLAB_TOKEN:-}" \
+                -v gitlab_groups="${GITLAB_GROUPS:-[]}" \
+                -v gitlab_host="${GITLAB_HOST:-https://gitlab.com}" \
+                -v git_email="$GIT_EMAIL" \
+                -v git_name="$GIT_NAME" \
+                -v api_base='https://api.github.com' \
+                -v maven_password="$MAVEN_PASSWORD" \
+                -v maven_username="$MAVEN_USERNAME" \
+                -v docker-hub-username="$DOCKER_USER" \
+                -v docker-hub-password="$DOCKER_PASS" \
+                -v nexus_url="$NEXUS_URL" > /dev/null
     ./fly -t advisor-demo unpause-pipeline -p rewrite-spawner
     ./fly -t advisor-demo trigger-job -j rewrite-spawner/discover-and-spawn
 }
